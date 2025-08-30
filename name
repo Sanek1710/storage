@@ -1,0 +1,202 @@
+# Flw4Code
+
+## Insights: SoTA Solutions
+**Current State-of-the-Art Analysis:**
+
+GraphCode2Vec demonstrates superior performance by combining lexical and program dependence features, achieving up to 18% improvement over syntax-only approaches. However, it's limited to Java bytecode analysis and requires compilation, making it unsuitable for large-scale source code analysis.
+
+**Key Competitors:**
+- **CodeBERT**: 124M parameters, syntax-only, requires massive computational resources
+- **Code2Vec**: AST-based but limited to syntactic features
+- **GraphCodeBERT**: Combines syntax/semantics but uses heuristic string matching instead of precise analysis
+
+## Motivations
+**SoTA Problems:**
+
+1. **Compilation Dependency**: State-of-the-art solutions like GraphCode2Vec require compiled bytecode (Java .class files), making them unsuitable for large-scale source code analysis without build infrastructure.
+
+2. **Performance Degradation**: Traditional text-based embeddings suffer from the curse of dimensionality when dealing with large codebases, leading to poor generalization.
+
+3. **Resource Intensity**: Current approaches like CodeBERT require 124M parameters and massive computational resources, making them impractical for real-time code analysis.
+
+4. **Scalability Issues**: Existing approaches struggle with codebases containing millions of lines of code, experiencing exponential performance degradation.
+
+**Technical Gap:**
+
+Traditional code embeddings are based on raw text chunks/sliding windows and are blind to semantic structure, dependencies, and types. GraphCode2Vec proves that capturing both lexical and program dependence features is crucial, achieving 0.99 cosine similarity for semantically equivalent but syntactically different code clones, compared to 0.51 for syntax-only approaches.
+
+## Project Objective
+**Primary Goal**: Create a high-performance code search and analysis system using the Flyweight Parser's index, optimized for large codebases without relying on LLMs for embeddings.
+
+**Key Objectives:**
+
+1. **Eliminate Compilation Dependency**: Provide precise semantic analysis directly from source code without requiring build artifacts.
+
+2. **Lightweight Architecture**: Use simple graph embeddings (graph2vec) instead of complex approaches to reduce computational overhead.
+
+3. **Scale to Enterprise Codebases**: Support analysis of codebases with 10M+ lines of code while maintaining sub-second response times.
+
+4. **Code Context Focus**: Optimize for code context understanding rather than complex downstream tasks.
+
+## Solution: Flw4Code
+**Our proposal** is to implement **Flw4Code**:
+composite-embedding system that uses FlwParser to build dependency graph from code and
+applies a graph embeddings (e.g. graph2vec) and natural language embeddings from plain
+source code.
+
+**Key Features:**
+- Encodes both code specific and natural language information
+- Provides ability to prioritise graphical or lexical semantics during the search based on
+task specifics:
+
+---
+*Application Slides marked with '*' for Flyweight Overview*
+(will not be included in final version)
+
+## *Graphical Semantic: Flw-Index Overview
+Flyweight's Parser index structure consists of 4 search-efficient main code structures that can be reused to represent well structured program dependency graphs:
+
+**Index Components:**
+1. **Symbol Resolution Tables**: Pre-computed symbol-to-declaration mappings
+2. **Cross-Reference Matrices**: Bidirectional relationship tracking
+3. **Hierarchical Namespace Trees**: Structured representation of code organization
+4. **Type Inference Caches**: Pre-computed type information
+
+---
+
+## *Graphical Semantic: Flw-Dependency Graphs
+Due to Flyweight's Parser specialization (indexing large codebases without compile commands information) some of the relations between code entities are fuzzy-connected, meaning some symbol resolutions appear to be ambiguous are merged in the same resolution group.
+
+**Fuzzy Resolution Benefits:**
+- **Robustness**: Handles incomplete or ambiguous code without failing
+- **Scalability**: Reduces computational complexity for large codebases
+- **Maintainability**: Automatically adapts to code changes
+
+---
+
+## Graphical Semantic: Call Graph Space (CGS)
+- Accumulates embedding vectors from the bottom to the top following incoming call graph edges
+- Encodes depth level information to vectors
+- Each node contains average semantic about all its down-path relatives.
+
+---
+
+## Flyweight's CGS Benefits
+- **Reuse flyweight indices** - to obtain proximate call graph from flyweight parser we technically don't need to build additional indices over existing tables, as desired columns are already indexed.
+
+- **Efficient Collection** - full flyweight's call graph in-depth traversal doesn't require to actually build whole call graph in one go, information can be partially collected and propagated to other nodes by-parts with total amount of propagations no more than total amount of call graph edges:
+  `TotalEdges≈#Refs (#Decls)/(#unique(Decls))`
+
+- **Auxiliaries Filtration** - encoded depth level information to vectors can help to distinguish API functions from utility functions (the lower the function - the more likely it is some auxiliary subroutine)
+
+## Application for AI Agents
+
+- **Find similar call graph nodes** - obtain nodes that are similar to initial node to acquire information about how specific symbols can be used building up solid example base for further code generation tasks.
+
+- **Thorough code explanation and summarization** - by changing level coordinate we can get similar contexts from other call graph layers that are related to original point without actual expensive call graph traversal.
+
+- **Codebase Clustering** - as each resulting vector contains average information about all downstream calls, we can attempt to determine key modules of the project by applying some clustering algorithm over some CGS top levels range.
+
+- **Weighted Search** - as structural embeddings are stored near-by lexical ones, for each request we can leverage its influence over word-based semantic search on total results simply by tweaking global weight for the graphical vectors, which reflects on resulting cosine similarity as vector search engines expect normalized vectors by design:
+S_c (w A/||A|| ,B/||B|| )=(wA•B)/(||A||•||B|| ) =[w•S]_c (A/||A|| ,B/||B|| )
+
+---
+
+## Initial Implementation Steps
+
+**Extract Code Relationships from FLw Index**
+- Leverage the existing Flyweight Parser's index storage to identify and extract meaningful code relationships (e.g., symbol dependencies, file interactions, and code structure hierarchies)
+
+**Implement Custom Embedding System**
+- Develop a lightweight, non-LLM-based graph embedding system that generates vector representations of code chunks directly from the FLw index
+- Enhance graph embeddings with word semantics for keyword / synonym based search
+- Focus on performance to handle large codebases efficiently
+
+**Create Search and Retrieval System**
+- Build a query interface that allows users to search the codebase using code snippets, keywords, or natural language queries
+- Ensure the system leverages the code context graph and embeddings for fast and accurate results
+
+**Integrate with Development Workflow**
+- Provide APIs and tools for integrating Flw4Code into the development environment (e.g. VSCode, CLI)
+- Enable features like code navigation, context-aware suggestions, and automated refactoring assistance
+
+## Benchmarking
+
+**Success Metrics**
+- **Performance**: Achieve sub-second response times for code searches, even on large codebases.
+- **Accuracy**: Deliver highly relevant search results by leveraging the structured code context graph.
+- **Scalability**: Support codebases with millions of lines of code without performance degradation.
+
+**Code Context Metrics:**
+- **Context Retrieval Accuracy**: > 0.85 precision for relevant code context retrieval
+- **Semantic Similarity**: > 0.80 cosine similarity for functionally related code snippets
+- **Query Response Time**: < 500ms for 95% of context-based queries
+
+**Baseline Comparison:**
+
+**GraphCode2Vec Results (Target Baseline):**
+- **Solution Classification**: F1-score 0.9746 (10.96% improvement over CodeBERT)
+- **Patch Classification**: F1-score 0.9359 (0.91% improvement over CodeBERT)
+
+**Expected Results:**
+- **Indexing Performance**: 3-5x faster than GraphCode2Vec due to elimination of compilation dependency
+- **Resource Usage**: < 20% of GraphCode2Vec's computational requirements
+- **Scalability**: Support for 5x larger codebases without performance degradation
+
+## Expected Results and Acceptance KPI
+
+**Primary Success Criteria:**
+
+1. **Performance Targets**:
+   - **Query Response Time**: < 500ms for 95% of queries on 1M+ line codebases
+   - **Indexing Performance**: 5-10x faster than traditional compilation-based approaches
+   - **Memory Efficiency**: < 50% of memory usage compared to full AST storage
+
+2. **Code Context Accuracy**:
+   - **Context Retrieval**: > 0.85 precision for relevant code context
+   - **Semantic Similarity**: > 0.80 cosine similarity for related code
+   - **Search Relevance**: > 0.80 recall for context-aware queries
+
+3. **Scalability Targets**:
+   - **Codebase Size**: Support for 10M+ line codebases
+   - **Concurrent Users**: Handle 100+ simultaneous users without degradation
+   - **Update Latency**: < 5 seconds for propagating code changes
+
+**Acceptance KPIs:**
+- **MVP**: Basic context search with 80% accuracy
+- **Beta**: Full feature set with 90% accuracy and < 1 second response time
+- **Production**: 95% accuracy, < 500ms response time, 10M+ line support
+
+## Risks and Limitations
+
+**Technical Risks:**
+
+1. **Fuzzy Resolution Accuracy**: Ambiguous symbol resolution may reduce semantic accuracy by 10-15%.
+
+2. **Scalability Bottlenecks**: Memory usage may grow with very large codebases, requiring architectural adjustments.
+
+3. **Language Support**: Initial implementation focused on Java/Python may not generalize to other languages.
+
+4. **Lightweight Trade-offs**: Simplified approach may sacrifice some accuracy compared to complex approaches.
+
+**Mitigation Strategies:**
+
+1. **Confidence Scoring**: Implement fallback to lexical search for low-confidence cases.
+
+2. **Hierarchical Indexing**: Use multi-level indexing for large codebases.
+
+3. **Language Abstraction**: Develop language-agnostic semantic models.
+
+4. **Hybrid Approach**: Combine lightweight embeddings with selective analysis for critical queries.
+
+**Resource Limitations:**
+
+1. **Development Timeline**: 9-month cycle may be insufficient for full enterprise features
+2. **Team Expertise**: Limited experience with graph embeddings may impact quality
+3. **Testing Infrastructure**: Lack of large-scale codebases for validation
+
+**Market Risks:**
+
+1. **Competition**: Established players may develop similar lightweight capabilities
+2. **Adoption Barriers**: Developer resistance to new tools and integration challenges
+3. **Performance Expectations**: Users may expect complex analysis without computational overhead 
